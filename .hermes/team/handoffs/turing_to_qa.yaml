@@ -1,0 +1,58 @@
+# turing_to_qa.yaml
+from: turing
+to: qa
+validation:
+  input_schema:
+    type: object
+    required: [feature_branch, unit_test_log, code_diff]
+    properties:
+      feature_branch:
+        type: string
+        pattern: "^feature/TASK-[A-Z0-9]{4}$"
+      unit_test_log:
+        type: string
+        pattern: "^tests/logs/TASK-[A-Z0-9]{4}_unit\\.log$"
+        description: "必须包含 'PASSED: 100%' 标识"
+      code_diff:
+        type: string
+        description: "git diff 格式，禁止含 'config/' 或硬编码密钥"
+  output_schema:
+    type: object
+    required: [integration_report, bug_list]
+    properties:
+      integration_report:
+        type: string
+        pattern: "^tests/reports/TASK-[A-Z0-9]{4}\\.html$"
+      bug_list:
+        type: array
+        items:
+          type: object
+          properties:
+            severity:
+              type: string
+              enum: ["BLOCKER", "CRITICAL", "MINOR"]
+
+auto_actions:
+  on_success:
+    - "qa 自动执行集成测试流水线"
+    - "锁定 feature/{task_id} 分支为只读（防后续修改）"
+  on_failure:
+    - "企业微信推送阻断消息（模板见 below）"
+    - "自动回滚 feature/{task_id} 分支至上次有效提交"
+
+wechat_card:
+  title: "🔥 代码提交被 QA 拦截"
+  description: "Turing 提交物未通过安全与质量门禁"
+  fields:
+    - name: "拦截原因"
+      value: "{validation_error.message}"
+    - name: "关键证据"
+      value: "> 单元测试日志缺失 'PASSED: 100%'\n> 检测到硬编码密钥：***{leak_key}***"
+  buttons:
+    - text: "查看安全扫描报告"
+      key: "VIEW_SECURITY_{task_id}"
+
+security_guards:
+  - "自动扫描 code_diff 中的 SECRET_PATTERN（如 'password:', 'api_key='）"
+  - "unit_test_log 必须含 'PASSED: 100%' 字样（防伪造）"
+  - "禁止 turing 传递 main 分支路径"

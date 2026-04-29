@@ -1,0 +1,54 @@
+# coo_to_alan.yaml
+from: coo
+to: alan
+validation:
+  input_schema:
+    type: object
+    required: [task_id, business_goal, deadline]
+    properties:
+      task_id:
+        type: string
+        pattern: "^TASK-[A-Z0-9]{4}$"  # 任务ID格式：TASK-ABCD
+      business_goal:
+        type: string
+        description: "必须用<50字描述核心业务价值，禁止包含技术实现细节"
+      deadline:
+        type: string
+        format: date-time  # ISO 8601格式（如 2025-04-30T18:00:00+08:00）
+  output_schema:
+    type: object
+    required: [doc_path, acceptance_criteria]
+    properties:
+      doc_path:
+        type: string
+        pattern: "^requirements/TASK-[A-Z0-9]{4}/(user_stories|competitor_analysis)\\.md$"
+        description: "需求文档必须存入指定目录"
+      acceptance_criteria:
+        type: array
+        items:
+          type: string
+          description: "每条必须含可验证条件（例：'用户输入错误密码3次后锁定账户'）"
+
+auto_actions:
+  on_success:
+    - "alan 自动创建目录: requirements/{task_id}/"
+    - "alan 生成需求文档模板并锁定 src/ 目录访问（系统级防护）"
+  on_failure:
+    - "企业微信推送阻断消息（模板见 below）"
+    - "任务状态回滚至 'PENDING_CLARIFICATION'"
+
+wechat_card:
+  title: "⚠️ 需求分析任务驳回"
+  description: "COO 任务分配不合规，请修正后重试"
+  fields:
+    - name: "缺失字段"
+      value: "{missing_fields}"
+    - name: "合规要求"
+      value: "• business_goal <50字\n• deadline 为ISO时间格式\n• 无技术实现描述"
+  buttons:
+    - text: "重新分配任务"
+      key: "RETRY_COO_ALAN"
+
+security_guards:
+  - "禁止 coo 传递任何含 'src/'、'config/' 的路径"
+  - "alan 收到任务后自动挂载只读权限的 src/ 目录（防止误触）"

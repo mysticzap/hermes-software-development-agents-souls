@@ -1,0 +1,59 @@
+# qa_to_coo.yaml
+from: qa
+to: coo
+validation:
+  input_schema:
+    type: object
+    required: [integration_report, bug_list]
+    properties:
+      integration_report:
+        type: string
+        pattern: "^tests/reports/TASK-[A-Z0-9]{4}\\.html$"
+      bug_list:
+        type: array
+        items:
+          type: object
+          required: [id, severity, steps]
+          properties:
+            severity:
+              type: string
+              enum: ["BLOCKER", "CRITICAL", "MINOR"]
+  output_schema:
+    type: object
+    required: [decision, action]
+    properties:
+      decision:
+        type: string
+        enum: ["APPROVE_MERGE", "REJECT_TO_TURING"]
+      action:
+        type: string
+        description: "COO 必须指定下一步（例：'合并至 main' 或 '指派 Turing 修复 BUG-123'）"
+
+auto_actions:
+  on_success:
+    - "若 decision=APPROVE_MERGE: coo 自动执行 git merge --no-ff feature/{task_id} main"
+    - "若 decision=REJECT_TO_TURING: 自动创建修复任务并指派 Turing"
+  on_failure:
+    - "企业微信推送阻断消息（模板见 below）"
+    - "任务状态冻结至 'QA_PENDING'"
+
+wechat_card:
+  title: "✅ 质量报告待 COO 决策"
+  description: "QA 已完成测试，请确认交付动作"
+  fields:
+    - name: "任务ID"
+      value: "{task_id}"
+    - name: "关键指标"
+      value: "> 通过率: {pass_rate}%\n> 阻断级BUG: {blocker_count}"
+  buttons:
+    - text: "批准合并"
+      key: "APPROVE_MERGE_{task_id}"
+      color: "green"
+    - text: "驳回修复"
+      key: "REJECT_{task_id}"
+      color: "red"
+
+security_guards:
+  - "禁止 qa 传递空 bug_list 且 severity=BLOCKER 的报告"
+  - "coo 执行合并时自动校验：仅当 bug_list[].severity != 'BLOCKER' 时允许操作"
+  - "decision=APPROVE_MERGE 时自动附加质量报告哈希值（防篡改）"

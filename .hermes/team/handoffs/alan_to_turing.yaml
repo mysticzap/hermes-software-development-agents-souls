@@ -1,0 +1,54 @@
+# alan_to_turing.yaml
+from: alan
+to: turing
+validation:
+  input_schema:
+    type: object
+    required: [doc_path, acceptance_criteria, uncertainty_tags]
+    properties:
+      doc_path:
+        type: string
+        pattern: "^requirements/TASK-[A-Z0-9]{4}/user_stories\\.md$"
+      acceptance_criteria:
+        type: array
+        minItems: 3  # 至少3条可验证标准
+      uncertainty_tags:
+        type: array
+        items:
+          type: string
+          enum: ["API_DELAY", "LEGAL_RISK", "UI_UNCONFIRMED"]  # 限定风险类型
+  output_schema:
+    type: object
+    required: [feature_branch, test_plan]
+    properties:
+      feature_branch:
+        type: string
+        pattern: "^feature/TASK-[A-Z0-9]{4}$"
+      test_plan:
+        type: string
+        pattern: "^tests/plans/TASK-[A-Z0-9]{4}\\.md$"
+
+auto_actions:
+  on_success:
+    - "turing 自动创建 feature/{task_id} 分支"
+    - "turing 生成测试计划骨架文件（含 acceptance_criteria 映射）"
+  on_failure:
+    - "企业微信推送阻断消息（模板见 below）"
+    - "自动触发 Alan 重新修订需求文档"
+
+wechat_card:
+  title: "🚫 需求文档未通过 Turing 验收"
+  description: "需求交付物缺失关键要素，请立即补充"
+  fields:
+    - name: "问题类型"
+      value: "{validation_error.type}"
+    - name: "修正指引"
+      value: "> acceptance_criteria 需≥3条可验证条件\n> 必须标注风险标签（LEGAL_RISK/UI_UNCONFIRMED等）"
+  buttons:
+    - text: "查看需求文档"
+      key: "VIEW_DOC_{task_id}"
+
+security_guards:
+  - "禁止 alan 传递任何含 'src/' 的文件路径"
+  - "turing 接收时自动扫描文档，发现 'src/' 关键字则拒绝加载"
+  - "uncertainty_tags 为空时自动插入 'NO_RISK_TAG' 预警"
